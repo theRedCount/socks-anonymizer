@@ -33,8 +33,26 @@ done
 [ -d /sys/class/net/tun0 ] || { echo "ERROR: tun0 did not appear" >&2; exit 1; }
 
 # Set up a new routing table "100 ethroute"
-echo "100 ethroute" >> /etc/iproute2/rt_tables
-ip route add default via "${ORIG_GW}" dev eth0 table ethroute
+mkdir -p /etc/iproute2
+if [ ! -f /etc/iproute2/rt_tables ]; then
+    # Create default rt_tables file if missing
+    cat > /etc/iproute2/rt_tables <<'EOFTABLES'
+#
+# reserved values
+#
+255	local
+254	main
+253	default
+0	unspec
+#
+# local
+#
+EOFTABLES
+fi
+
+# Add ethroute table if not already present
+grep -q "ethroute" /etc/iproute2/rt_tables || echo "100 ethroute" >> /etc/iproute2/rt_tables
+ip route add default via "${ORIG_GW}" dev eth0 table ethroute 2>/dev/null || true
 
 # Mark incoming connections on eth0
 iptables -t mangle -A PREROUTING -i eth0 -p tcp --dport 1080 -j CONNMARK --set-mark 0x1
